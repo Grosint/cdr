@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDR Intelligence Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <link href="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.css" rel="stylesheet" />
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">CDR Intelligence</h1>
+                <p class="tagline">Telecom Data Analysis Platform</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-view="upload">
+                    <span class="nav-icon">📤</span>
+                    <span>Upload CDR</span>
+                </button>
+                <button class="nav-item" data-view="single-analysis">
+                    <span class="nav-icon">🔍</span>
+                    <span>Single Analysis</span>
+                </button>
+                <button class="nav-item" data-view="multiple-analysis">
+                    <span class="nav-icon">🔗</span>
+                    <span>Multiple Analysis</span>
+                </button>
+                <button class="nav-item" data-view="utils">
+                    <span class="nav-icon">🛠️</span>
+                    <span>Utilities</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span>Checking connection...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload View -->
+            <div class="view" id="uploadView">
+                <div class="view-header">
+                    <h2>Upload CDR Files</h2>
+                    <p>Upload and process Call Detail Records from various telecom vendors</p>
+                </div>
+
+                <div class="glass-card upload-card">
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">📁</div>
+                        <h3>Drag & Drop CDR Files</h3>
+                        <p>Supports CSV, XLS, XLSX, JSON formats</p>
+                        <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.json" multiple style="display: none;">
+                        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            Browse Files
+                        </button>
+                    </div>
+
+                    <div class="upload-options">
+                        <div class="form-group">
+                            <label>Suspect Name (Optional)</label>
+                            <input type="text" id="suspectName" placeholder="Enter suspect name">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="autoDetect" checked>
+                                Auto-detect file format
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="uploadProgress" class="upload-progress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <p id="progressText">Processing...</p>
+                    </div>
+
+                    <div id="uploadResults" class="upload-results"></div>
+                </div>
+
+                <div class="glass-card">
+                    <h3>Available Suspects</h3>
+                    <div id="suspectsList" class="suspects-list"></div>
+                </div>
+            </div>
+
+            <!-- Single Analysis View -->
+            <div class="view" id="singleAnalysisView" style="display: none;">
+                <div class="view-header">
+                    <h2>Single CDR Analysis</h2>
+                    <p>Deep dive into individual suspect data</p>
+                </div>
+
+                <div class="glass-card">
+                    <div class="form-group">
+                        <label>Select Suspect</label>
+                        <select id="singleSuspectSelect" class="select-input">
+                            <option value="">-- Select Suspect --</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadSingleAnalysis()">Analyze</button>
+                    </div>
+                </div>
+
+                <div class="analysis-tabs">
+                    <button class="tab-btn active" data-tab="imei">IMEI Analysis</button>
+                    <button class="tab-btn" data-tab="towers">Cell Towers</button>
+                    <button class="tab-btn" data-tab="contacts">Contacts</button>
+                    <button class="tab-btn" data-tab="sms">SMS Services</button>
+                    <button class="tab-btn" data-tab="international">International</button>
+                </div>
+
+                <div class="tab-content active" id="imeiTab">
+                    <div class="glass-card">
+                        <h3>IMEI Device Analysis</h3>
+                        <div id="imeiContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="towersTab">
+                    <div class="glass-card">
+                        <h3>Cell Tower Locations</h3>
+                        <div style="margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1; min-width: 200px;">
+                                <label>Start Date/Time</label>
+                                <input type="datetime-local" id="towerStartDate" class="select-input">
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 200px;">
+                                <label>End Date/Time</label>
+                                <input type="datetime-local" id="towerEndDate" class="select-input">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: flex-end;">
+                                <button class="btn btn-primary" onclick="loadTowerAnalysis(document.getElementById('singleSuspectSelect').value)">Apply Filter</button>
+                            </div>
+                        </div>
+                        <div id="towerMap" class="map-container"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="contactsTab">
+                    <div class="glass-card">
+                        <h3>Contact Analysis</h3>
+                        <div id="contactsContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="smsTab">
+                    <div class="glass-card">
+                        <h3>SMS Service Detection</h3>
+                        <div id="smsContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="internationalTab">
+                    <div class="glass-card">
+                        <h3>International Calls</h3>
+                        <div id="internationalContent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Multiple Analysis View -->
+            <div class="view" id="multipleAnalysisView" style="display: none;">
+                <div class="view-header">
+                    <h2>Multiple CDR Analysis</h2>
+                    <p>Compare and find connections between multiple suspects</p>
+                </div>
+
+                <div class="glass-card">
+                    <div class="form-group">
+                        <label>Select Suspects (Multiple)</label>
+                        <div id="multipleSuspectSelect" class="multi-select">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                        <button class="btn btn-primary" onclick="loadMultipleAnalysis()">Analyze</button>
+                    </div>
+                </div>
+
+                <div class="analysis-tabs">
+                    <button class="tab-btn active" data-tab="common-numbers">Common Numbers</button>
+                    <button class="tab-btn" data-tab="common-towers">Common Towers</button>
+                    <button class="tab-btn" data-tab="common-imei">Common IMEI</button>
+                </div>
+
+                <div class="tab-content active" id="commonNumbersTab">
+                    <div class="glass-card">
+                        <h3>Common Numbers Network</h3>
+                        <div id="networkGraph" class="network-container"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="commonTowersTab">
+                    <div class="glass-card">
+                        <h3>Common Cell Towers Map</h3>
+                        <div id="towersMap" class="map-container"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="commonImeiTab">
+                    <div class="glass-card">
+                        <h3>Common IMEI Devices</h3>
+                        <div id="commonImeiContent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Utilities View -->
+            <div class="view" id="utilsView" style="display: none;">
+                <div class="view-header">
+                    <h2>Utilities</h2>
+                    <p>Tools and utilities for CDR data management</p>
+                </div>
+
+                <div class="glass-card">
+                    <h3>Generate Sample Data</h3>
+                    <div class="form-group">
+                        <label>Suspect Name</label>
+                        <input type="text" id="sampleSuspectName" placeholder="Enter suspect name">
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Records</label>
+                        <input type="number" id="sampleRecordCount" value="100" min="10" max="10000">
+                    </div>
+                    <button class="btn btn-primary" onclick="generateSampleData()">Generate</button>
+                    <div id="sampleDataResult"></div>
+                </div>
+
+                    <div class="glass-card">
+                    <h3>Export Data</h3>
+                    <div class="form-group">
+                        <label>Select Suspect</label>
+                        <select id="exportSuspectSelect" class="select-input">
+                            <option value="">-- Select Suspect --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="exportData('json')">Export to JSON</button>
+                        <button class="btn btn-secondary" onclick="exportData('csv')">Export to CSV</button>
+                        <button class="btn btn-primary" onclick="exportData('kml')" style="background: linear-gradient(135deg, #10b981, #3b82f6);">Export to KML (Google Earth)</button>
+                        <button class="btn btn-primary" onclick="exportPDF()" style="background: linear-gradient(135deg, #ec4899, #8b5cf6);">Export PDF Report</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
