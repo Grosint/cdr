@@ -28,4 +28,9 @@ fi
 # Start backend server
 echo "🌐 Starting FastAPI server..."
 cd backend
-python main.py
+python main.py &
+
+# Start frontend server
+echo "🖥️ Starting frontend server..."
+cd ../frontend
+python -m http.server 8080 &

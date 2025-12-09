@@ -5,12 +5,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
+let geofenceMap;
+let draw;
+
 async function initializeApp() {
     checkConnection();
     setupNavigation();
     setupFileUpload();
     setupTabs();
     loadSuspects();
+    setupGeofencing();
+    setupWebSocket();
 
     // Refresh suspects list every 30 seconds
     setInterval(loadSuspects, 30000);
@@ -257,7 +262,7 @@ async function loadSuspects() {
             `).join('');
 
             // Update select dropdowns
-            const selects = ['singleSuspectSelect', 'exportSuspectSelect'];
+            const selects = ['singleSuspectSelect', 'exportSuspectSelect', 'geofenceSuspect'];
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (select) {
@@ -1121,4 +1126,105 @@ async function exportPDF() {
     } catch (error) {
         alert(`Error generating PDF: ${error.message}`);
     }
+}
+
+// Geofencing
+function setupGeofencing() {
+    geofenceMap = new maplibregl.Map({
+        container: 'geofenceMap',
+        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+        center: [0, 0],
+        zoom: 2
+    });
+
+    draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+            polygon: true,
+            trash: true
+        }
+    });
+    geofenceMap.addControl(draw);
+
+    geofenceMap.on('load', () => {
+        loadGeofences();
+    });
+}
+
+async function loadGeofences() {
+    try {
+        const response = await fetch(`${API_BASE}/geofences`);
+        const geofences = await response.json();
+        const geofenceList = document.getElementById('geofenceList');
+        geofenceList.innerHTML = '';
+
+        geofences.forEach(geofence => {
+            draw.add(geofence.geometry);
+            const item = document.createElement('div');
+            item.className = 'geofence-item';
+            item.innerHTML = `
+                <span>${geofence.name}</span>
+                <button onclick="deleteGeofence('${geofence._id}')">Delete</button>
+            `;
+            geofenceList.appendChild(item);
+        });
+    } catch (error) {
+        console.error('Error loading geofences:', error);
+    }
+}
+
+async function saveGeofence() {
+    const name = document.getElementById('geofenceName').value;
+    const description = document.getElementById('geofenceDescription').value;
+    const suspect = document.getElementById('geofenceSuspect').value;
+    const data = draw.getAll();
+
+    if (data.features.length > 0) {
+        const geofence = {
+            name,
+            description,
+            suspect_name: suspect,
+            geometry: data.features[0].geometry
+        };
+
+        try {
+            await fetch(`${API_BASE}/geofences`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(geofence)
+            });
+            draw.deleteAll();
+            loadGeofences();
+        } catch (error) {
+            console.error('Error saving geofence:', error);
+        }
+    }
+}
+
+async function deleteGeofence(id) {
+    try {
+        await fetch(`${API_BASE}/geofences/${id}`, {
+            method: 'DELETE'
+        });
+        loadGeofences();
+    } catch (error) {
+        console.error('Error deleting geofence:', error);
+    }
+}
+
+function setupWebSocket() {
+    const socket = new WebSocket('ws://localhost:8000/ws/geofence-alerts');
+
+    socket.onmessage = function(event) {
+        const alert = JSON.parse(event.data);
+        const alertsDiv = document.getElementById('geofenceAlerts');
+        const alertEl = document.createElement('div');
+        alertEl.className = 'alert';
+        alertEl.innerHTML = `
+            <strong>Geofence Breach:</strong> ${alert.suspect_name} entered ${alert.geofence_name} at ${new Date(alert.timestamp).toLocaleString()}
+        `;
+        alertsDiv.appendChild(alertEl);
+    };
 }
