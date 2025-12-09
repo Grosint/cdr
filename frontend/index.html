@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.2/mapbox-gl-draw.js"></script>
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.2/mapbox-gl-draw.css" type="text/css" />
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
     <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <link href="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.css" rel="stylesheet" />
@@ -39,6 +41,10 @@
                 <button class="nav-item" data-view="utils">
                     <span class="nav-icon">🛠️</span>
                     <span>Utilities</span>
+                </button>
+                <button class="nav-item" data-view="geofencing">
+                    <span class="nav-icon">🌐</span>
+                    <span>Geofencing</span>
                 </button>
             </nav>
 
@@ -253,6 +259,41 @@
                         <button class="btn btn-primary" onclick="exportData('kml')" style="background: linear-gradient(135deg, #10b981, #3b82f6);">Export to KML (Google Earth)</button>
                         <button class="btn btn-primary" onclick="exportPDF()" style="background: linear-gradient(135deg, #ec4899, #8b5cf6);">Export PDF Report</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Geofencing View -->
+            <div class="view" id="geofencingView" style="display: none;">
+                <div class="view-header">
+                    <h2>Geofencing</h2>
+                    <p>Create and manage geofences for real-time alerts</p>
+                </div>
+                <div class="glass-card">
+                    <div id="geofenceMap" class="map-container"></div>
+                </div>
+                <div class="glass-card">
+                    <h3>Create Geofence</h3>
+                    <div class="form-group">
+                        <label>Geofence Name</label>
+                        <input type="text" id="geofenceName" class="select-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="geofenceDescription" class="select-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Suspect Name</label>
+                        <select id="geofenceSuspect" class="select-input"></select>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveGeofence()">Save Geofence</button>
+                </div>
+                <div class="glass-card">
+                    <h3>Existing Geofences</h3>
+                    <div id="geofenceList"></div>
+                </div>
+                <div class="glass-card">
+                    <h3>Real-time Alerts</h3>
+                    <div id="geofenceAlerts"></div>
                 </div>
             </div>
         </main>

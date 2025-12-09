@@ -4,6 +4,29 @@ from typing import Dict, Optional
 import re
 from models import CDRRecord, VENDOR_FORMATS, CallType, CallDirection, CallStatus
 from database import get_database
+from shapely.geometry import Point, Polygon
+import json
+
+async def check_geofence_breach(record, manager):
+    db = await get_database()
+    geofences = await db.geofences.find({"suspect_name": record["suspect_name"]}).to_list(1000)
+
+    if "location_lat" in record and "location_lon" in record:
+        point = Point(record["location_lon"], record["location_lat"])
+        for geofence in geofences:
+            polygon = Polygon(geofence["geometry"]["coordinates"][0])
+            if polygon.contains(point):
+                alert_message = {
+                    "type": "geofence_breach",
+                    "suspect_name": record["suspect_name"],
+                    "geofence_name": geofence["name"],
+                    "timestamp": record["call_start_time"].isoformat(),
+                    "location": {
+                        "lat": record["location_lat"],
+                        "lon": record["location_lon"]
+                    }
+                }
+                await manager.broadcast(json.dumps(alert_message))
 
 async def detect_format(file_path: str) -> Optional[Dict]:
     """Auto-detect CDR file format and vendor"""
@@ -145,13 +168,14 @@ def infer_direction(row: pd.Series, column_mapping: Dict, suspect_number: Option
 async def process_cdr_file(
     file_path: str,
     suspect_name: Optional[str] = None,
-    format_info: Optional[Dict] = None
+    format_info: Optional[Dict] = None,
+    manager=None
 ) -> Dict:
     """Process CDR file and insert into database"""
     try:
         # Handle JSON files
         if file_path.endswith('.json'):
-            return await process_json_file(file_path, suspect_name)
+            return await process_json_file(file_path, suspect_name, manager)
 
         # Read file
         if file_path.endswith('.csv'):
@@ -289,6 +313,9 @@ async def process_cdr_file(
                 cdr_record = CDRRecord(**record_data)
                 records.append(cdr_record.dict())
 
+                if manager:
+                    await check_geofence_breach(cdr_record.dict(), manager)
+
             except Exception as e:
                 print(f"Error processing row {idx}: {e}")
                 continue
@@ -313,7 +340,8 @@ async def process_cdr_file(
 
 async def process_json_file(
     file_path: str,
-    suspect_name: Optional[str] = None
+    suspect_name: Optional[str] = None,
+    manager=None
 ) -> Dict:
     """Process JSON CDR file and insert into database"""
     try:
@@ -386,6 +414,9 @@ async def process_json_file(
                 # Create CDR record
                 cdr_record = CDRRecord(**record_data)
                 records.append(cdr_record.dict())
+
+                if manager:
+                    await check_geofence_breach(cdr_record.dict(), manager)
 
             except Exception as e:
                 print(f"Error processing JSON record: {e}")

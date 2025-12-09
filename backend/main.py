@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 import os
@@ -17,13 +17,16 @@ from analytics import (
     analyze_international_calls,
     find_common_numbers,
     find_common_towers,
-    find_common_imei
+    find_common_imei,
 )
 from utils import generate_sample_data, export_to_json, export_to_csv
 from pdf_export import create_pdf_report
 from kml_export import export_to_kml
+from geofencing import router as geofencing_router, manager as geofence_manager
 
 app = FastAPI(title="CDR Intelligence Platform", version="1.0.0")
+
+app.include_router(geofencing_router, prefix="/api", tags=["geofencing"])
 
 # CORS middleware
 app.add_middleware(
@@ -118,7 +121,7 @@ async def upload_cdr(
             format_info = await detect_format(file_path)
 
         # Process CDR file
-        result = await process_cdr_file(file_path, suspect_name, format_info)
+        result = await process_cdr_file(file_path, suspect_name, format_info, geofence_manager)
 
         return {
             "success": True,
