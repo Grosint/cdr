@@ -1,4 +1,5 @@
-const API_BASE = 'http://localhost:8000/api';
+// Use relative URLs - works for both local and production
+const API_BASE = '/api';
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -24,7 +25,7 @@ async function initializeApp() {
 // Connection Status
 async function checkConnection() {
     try {
-        const response = await fetch('http://localhost:8000/health');
+        const response = await fetch('/health');
         const data = await response.json();
         const statusEl = document.getElementById('connectionStatus');
         const dot = statusEl.querySelector('.status-dot');
@@ -1215,7 +1216,10 @@ async function deleteGeofence(id) {
 }
 
 function setupWebSocket() {
-    const socket = new WebSocket('ws://localhost:8000/ws/geofence-alerts');
+    // Use the same protocol and host as the current page
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/geofence-alerts`;
+    const socket = new WebSocket(wsUrl);
 
     socket.onmessage = function(event) {
         const alert = JSON.parse(event.data);
