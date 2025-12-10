@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
+from contextlib import asynccontextmanager
 import os
 from typing import List, Optional
 import json
@@ -24,9 +26,34 @@ from pdf_export import create_pdf_report
 from kml_export import export_to_kml
 from geofencing import router as geofencing_router, manager as geofence_manager
 
-app = FastAPI(title="CDR Intelligence Platform", version="1.0.0")
+# Create uploads directory (use absolute path)
+uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    try:
+        await test_connection()
+        print("✓ MongoDB connection successful")
+    except Exception as e:
+        print(f"✗ MongoDB connection failed: {e}")
+    yield
+    # Shutdown (if needed)
+    pass
+
+app = FastAPI(
+    title="CDR Intelligence Platform",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 app.include_router(geofencing_router, prefix="/api", tags=["geofencing"])
+
+# Mount static files
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 # CORS middleware
 app.add_middleware(
@@ -52,22 +79,12 @@ async def http_exception_handler(request, exc: HTTPException):
         }
     )
 
-# Create uploads directory (use absolute path)
-uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(uploads_dir, exist_ok=True)
-
-@app.on_event("startup")
-async def startup_event():
-    """Test database connection on startup"""
-    try:
-        await test_connection()
-        print("✓ MongoDB connection successful")
-    except Exception as e:
-        print(f"✗ MongoDB connection failed: {e}")
-
-@app.get("/")
-async def root():
-    return {"message": "CDR Intelligence Platform API", "version": "1.0.0"}
+# Serve frontend files
+@app.get("/", include_in_schema=False)
+async def serve_frontend():
+    """Serve the frontend index.html"""
+    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+    return FileResponse(os.path.join(frontend_dir, "index.html"))
 
 @app.get("/health")
 async def health_check():
@@ -365,6 +382,25 @@ async def export_pdf_report(suspect_name: str):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+# Catch-all route for frontend files (must be after all API routes)
+@app.get("/{path:path}", include_in_schema=False)
+async def serve_frontend_files(path: str):
+    """Serve frontend static files"""
+    # Don't serve API routes through this catch-all
+    if path.startswith("api"):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+    file_path = os.path.join(frontend_dir, path)
+
+    # If file exists, serve it
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+
+    # Otherwise, serve index.html for client-side routing
+    return FileResponse(os.path.join(frontend_dir, "index.html"))
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
