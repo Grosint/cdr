@@ -32,6 +32,7 @@ async def create_indexes(db):
     """Create database indexes for common query patterns"""
     try:
         # Single field indexes
+        await db.cdr_records.create_index("session_id")  # Primary identifier
         await db.cdr_records.create_index("suspect_name")
         await db.cdr_records.create_index("calling_number")
         await db.cdr_records.create_index("called_number")
@@ -42,10 +43,11 @@ async def create_indexes(db):
         await db.cdr_records.create_index("call_type")
 
         # Compound indexes for common queries
-        await db.cdr_records.create_index([("suspect_name", 1), ("call_start_time", -1)])
-        await db.cdr_records.create_index([("suspect_name", 1), ("imei", 1)])
+        await db.cdr_records.create_index([("session_id", 1), ("call_start_time", -1)])
+        await db.cdr_records.create_index([("session_id", 1), ("imei", 1)])
         await db.cdr_records.create_index([("calling_number", 1), ("called_number", 1)])
-        await db.cdr_records.create_index([("suspect_name", 1), ("cell_tower_id", 1)])
+        await db.cdr_records.create_index([("session_id", 1), ("cell_tower_id", 1)])
+        await db.cdr_records.create_index([("suspect_name", 1), ("call_start_time", -1)])  # Legacy support
 
         # Geospatial index for location queries
         await db.cdr_records.create_index([("location_lat", 1), ("location_lon", 1)])

@@ -78,10 +78,6 @@
 
                     <div class="upload-options">
                         <div class="form-group">
-                            <label>Suspect Name (Optional)</label>
-                            <input type="text" id="suspectName" placeholder="Enter suspect name">
-                        </div>
-                        <div class="form-group">
                             <label>
                                 <input type="checkbox" id="autoDetect" checked>
                                 Auto-detect file format
@@ -99,38 +95,104 @@
                     <div id="uploadResults" class="upload-results"></div>
                 </div>
 
-                <div class="glass-card">
-                    <h3>Available Suspects</h3>
-                    <div id="suspectsList" class="suspects-list"></div>
-                </div>
             </div>
 
-            <!-- Single Analysis View -->
+            <!-- Analysis View -->
             <div class="view" id="singleAnalysisView" style="display: none;">
                 <div class="view-header">
-                    <h2>Single CDR Analysis</h2>
-                    <p>Deep dive into individual suspect data</p>
-                </div>
-
-                <div class="glass-card">
-                    <div class="form-group">
-                        <label>Select Suspect</label>
-                        <select id="singleSuspectSelect" class="select-input">
-                            <option value="">-- Select Suspect --</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="loadSingleAnalysis()">Analyze</button>
-                    </div>
+                    <h2>CDR Analysis Results</h2>
+                    <p>Comprehensive analysis of uploaded CDR data</p>
                 </div>
 
                 <div class="analysis-tabs">
-                    <button class="tab-btn active" data-tab="imei">IMEI Analysis</button>
+                    <button class="tab-btn active" data-tab="summary">Summary</button>
+                    <button class="tab-btn" data-tab="corrected">Corrected</button>
+                    <button class="tab-btn" data-tab="max-call">Max Call</button>
+                    <button class="tab-btn" data-tab="max-circle-call">Max Circle Call</button>
+                    <button class="tab-btn" data-tab="daily-first-last">Daily First/Last</button>
+                    <button class="tab-btn" data-tab="max-duration">Max Duration</button>
+                    <button class="tab-btn" data-tab="max-imei">Max IMEI</button>
+                    <button class="tab-btn" data-tab="daily-imei-tracking">Daily IMEI Tracking</button>
+                    <button class="tab-btn" data-tab="max-location">Max Location</button>
+                    <button class="tab-btn" data-tab="daily-first-last-location">Daily First/Last Location</button>
+                    <button class="tab-btn" data-tab="imei">IMEI Analysis</button>
                     <button class="tab-btn" data-tab="towers">Cell Towers</button>
                     <button class="tab-btn" data-tab="contacts">Contacts</button>
                     <button class="tab-btn" data-tab="sms">SMS Services</button>
                     <button class="tab-btn" data-tab="international">International</button>
                 </div>
 
-                <div class="tab-content active" id="imeiTab">
+                <div class="tab-content active" id="summaryTab">
+                    <div class="glass-card">
+                        <h3>Summary</h3>
+                        <div id="summaryContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="correctedTab">
+                    <div class="glass-card">
+                        <h3>Corrected Dataset</h3>
+                        <div id="correctedContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="maxCallTab">
+                    <div class="glass-card">
+                        <h3>Max Call</h3>
+                        <div id="maxCallContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="maxCircleCallTab">
+                    <div class="glass-card">
+                        <h3>Max Circle Call</h3>
+                        <div id="maxCircleCallContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="dailyFirstLastTab">
+                    <div class="glass-card">
+                        <h3>Daily First & Last Call</h3>
+                        <div id="dailyFirstLastContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="maxDurationTab">
+                    <div class="glass-card">
+                        <h3>Max Duration</h3>
+                        <div id="maxDurationContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="maxImeiTab">
+                    <div class="glass-card">
+                        <h3>Max IMEI</h3>
+                        <div id="maxImeiContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="dailyImeiTrackingTab">
+                    <div class="glass-card">
+                        <h3>Daily IMEI Tracking</h3>
+                        <div id="dailyImeiTrackingContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="maxLocationTab">
+                    <div class="glass-card">
+                        <h3>Max Location</h3>
+                        <div id="maxLocationContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="dailyFirstLastLocationTab">
+                    <div class="glass-card">
+                        <h3>Daily First & Last Location</h3>
+                        <div id="dailyFirstLastLocationContent"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="imeiTab">
                     <div class="glass-card">
                         <h3>IMEI Device Analysis</h3>
                         <div id="imeiContent"></div>
@@ -254,6 +316,7 @@
                         </select>
                     </div>
                     <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="exportData('excel')" style="background: linear-gradient(135deg, #10b981, #059669);">Export to Excel (Multi-Sheet)</button>
                         <button class="btn btn-primary" onclick="exportData('json')">Export to JSON</button>
                         <button class="btn btn-secondary" onclick="exportData('csv')">Export to CSV</button>
                         <button class="btn btn-primary" onclick="exportData('kml')" style="background: linear-gradient(135deg, #10b981, #3b82f6);">Export to KML (Google Earth)</button>

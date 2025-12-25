@@ -6,11 +6,47 @@ from contextlib import asynccontextmanager
 import os
 from typing import List, Optional
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 from database import get_database, test_connection
 from models import CDRRecord
 from cdr_processor import process_cdr_file, detect_format
+
+# Helper function to convert datetime objects to strings for JSON serialization
+def convert_datetime_to_str(obj):
+    """Recursively convert datetime objects to ISO format strings"""
+    # Handle datetime objects
+    if isinstance(obj, datetime):
+        try:
+            return obj.isoformat()
+        except Exception:
+            return str(obj)
+    # Handle date objects (but not datetime, since datetime is a subclass of date)
+    elif isinstance(obj, date) and not isinstance(obj, datetime):
+        try:
+            return obj.isoformat()
+        except Exception:
+            return str(obj)
+    # Handle dictionaries
+    elif isinstance(obj, dict):
+        return {key: convert_datetime_to_str(value) for key, value in obj.items()}
+    # Handle lists
+    elif isinstance(obj, list):
+        return [convert_datetime_to_str(item) for item in obj]
+    # Handle tuples
+    elif isinstance(obj, tuple):
+        return tuple(convert_datetime_to_str(item) for item in obj)
+    # Handle sets
+    elif isinstance(obj, set):
+        return {convert_datetime_to_str(item) for item in obj}
+    # Check for datetime-like objects (has isoformat method)
+    elif hasattr(obj, 'isoformat') and callable(getattr(obj, 'isoformat')):
+        try:
+            return obj.isoformat()
+        except Exception:
+            return str(obj)
+    else:
+        return obj
 from analytics import (
     analyze_imei,
     analyze_cell_towers,
@@ -21,6 +57,20 @@ from analytics import (
     find_common_towers,
     find_common_imei,
 )
+from cdr_analytics import (
+    generate_all_analytics,
+    generate_summary,
+    generate_corrected,
+    generate_max_call,
+    generate_max_circle_call,
+    generate_daily_first_last,
+    generate_max_duration,
+    generate_max_imei,
+    generate_daily_imei_tracking,
+    generate_max_location,
+    generate_daily_first_last_location
+)
+from excel_export import export_to_excel
 from utils import generate_sample_data, export_to_json, export_to_csv
 from pdf_export import create_pdf_report
 from kml_export import export_to_kml
@@ -109,7 +159,7 @@ async def upload_cdr(
     suspect_name: Optional[str] = None,
     auto_detect: bool = True
 ):
-    """Upload and process CDR file"""
+    """Upload and process CDR file - auto-analyzes and returns results"""
     try:
         # Validate file
         if not file.filename:
@@ -140,13 +190,39 @@ async def upload_cdr(
         # Process CDR file
         result = await process_cdr_file(file_path, suspect_name, format_info, geofence_manager)
 
-        return {
+        # Auto-generate analytics
+        session_id = result.get("session_id")
+        try:
+            analytics = await generate_all_analytics(session_id=session_id, suspect_name=suspect_name)
+            analytics = convert_datetime_to_str(analytics)
+        except Exception as analytics_error:
+            # If analytics generation fails, return empty analytics but don't fail the upload
+            print(f"Analytics generation error: {analytics_error}")
+            import traceback
+            traceback.print_exc()
+            analytics = {}
+
+        # Convert result dictionary as well (might contain datetime objects)
+        result_clean = convert_datetime_to_str(result)
+
+        # Convert format_info as well (might contain datetime objects)
+        format_info_clean = convert_datetime_to_str(format_info) if format_info else None
+
+        response = {
             "success": True,
-            "message": f"Processed {result['records_inserted']} records",
-            "suspect_name": result.get("suspect_name"),
-            "format_detected": format_info,
-            "records_inserted": result["records_inserted"]
+            "message": f"Processed {result_clean.get('records_inserted', 0)} records",
+            "session_id": session_id,
+            "suspect_name": result_clean.get("suspect_name"),
+            "format_detected": format_info_clean,
+            "records_inserted": result_clean.get("records_inserted", 0),
+            "analytics": analytics  # Include analytics in response
         }
+
+        # Ensure entire response is JSON serializable (double-check)
+        response = convert_datetime_to_str(response)
+
+        # Use JSONResponse to ensure proper serialization
+        return JSONResponse(content=response)
     except HTTPException:
         raise
     except Exception as e:
@@ -154,6 +230,13 @@ async def upload_cdr(
         error_detail = str(e)
         print(f"Upload error: {error_detail}")
         print(traceback.format_exc())
+        # Ensure error response is JSON serializable
+        try:
+            # Try to convert any datetime objects in the error detail
+            if "datetime" in error_detail.lower():
+                error_detail = error_detail.replace("Object of type datetime", "Datetime object")
+        except:
+            pass
         raise HTTPException(
             status_code=500,
             detail=f"Error processing file: {error_detail}"
@@ -267,31 +350,39 @@ async def get_all_suspects():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/export/{suspect_name}")
-async def export_suspect_data(suspect_name: str, format: str = "json"):
-    """Export suspect data to JSON, CSV, or KML"""
+@app.get("/api/export")
+async def export_data(format: str = "json", session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Export data to JSON, CSV, KML, or Excel"""
     try:
+        identifier = session_id or suspect_name or "cdr"
         if format.lower() == "csv":
-            file_path = await export_to_csv(suspect_name)
+            file_path = await export_to_csv(suspect_name or identifier)
             return FileResponse(
                 file_path,
                 media_type="text/csv",
-                filename=f"{suspect_name}_cdr_export.csv"
+                filename=f"{identifier}_cdr_export.csv"
             )
         elif format.lower() == "kml":
             api_key = os.getenv("OPENCELLID_API_KEY")
-            file_path = await export_to_kml(suspect_name, api_key)
+            file_path = await export_to_kml(suspect_name or identifier, api_key)
             return FileResponse(
                 file_path,
                 media_type="application/vnd.google-earth.kml+xml",
-                filename=f"{suspect_name}_cdr_path.kml"
+                filename=f"{identifier}_cdr_path.kml"
+            )
+        elif format.lower() == "excel" or format.lower() == "xlsx":
+            file_path = await export_to_excel(session_id=session_id, suspect_name=suspect_name)
+            return FileResponse(
+                file_path,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=f"{identifier}_cdr_analysis.xlsx"
             )
         else:
-            file_path = await export_to_json(suspect_name)
+            file_path = await export_to_json(suspect_name or identifier)
             return FileResponse(
                 file_path,
                 media_type="application/json",
-                filename=f"{suspect_name}_cdr_export.json"
+                filename=f"{identifier}_cdr_export.json"
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -306,6 +397,128 @@ async def generate_sample(suspect_name: str, record_count: int = 100):
             "message": f"Generated {result} sample records",
             "records_generated": result
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Comprehensive CDR Analytics Endpoints
+@app.get("/api/analytics/comprehensive")
+async def get_comprehensive_analytics(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get all 10 analytical views at once"""
+    try:
+        analytics = await generate_all_analytics(session_id=session_id, suspect_name=suspect_name)
+        analytics = convert_datetime_to_str(analytics)
+        return {"success": True, "data": analytics}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/comprehensive/{identifier}")
+async def get_comprehensive_analytics_by_id(identifier: str):
+    """Get all 10 analytical views by session_id or suspect_name"""
+    try:
+        # Try as session_id first, fallback to suspect_name
+        analytics = await generate_all_analytics(session_id=identifier, suspect_name=identifier)
+        analytics = convert_datetime_to_str(analytics)
+        return {"success": True, "data": analytics}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/summary")
+async def get_summary(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get Summary analytics"""
+    try:
+        data = await generate_summary(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return JSONResponse(content={"success": True, "data": data})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/corrected")
+async def get_corrected(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get Corrected dataset"""
+    try:
+        data = await generate_corrected(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/max-call")
+async def get_max_call(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get MaxCall analytics"""
+    try:
+        data = await generate_max_call(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/max-circle-call")
+async def get_max_circle_call(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get MaxCircleCall analytics"""
+    try:
+        data = await generate_max_circle_call(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/daily-first-last")
+async def get_daily_first_last(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get DailyFirstLast analytics"""
+    try:
+        data = await generate_daily_first_last(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/max-duration")
+async def get_max_duration(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get MaxDuration analytics"""
+    try:
+        data = await generate_max_duration(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/max-imei")
+async def get_max_imei(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get MaxIMEI analytics"""
+    try:
+        data = await generate_max_imei(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/daily-imei-tracking")
+async def get_daily_imei_tracking(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get DailyIMEIATracking analytics"""
+    try:
+        data = await generate_daily_imei_tracking(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/max-location")
+async def get_max_location(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get MaxLocation analytics"""
+    try:
+        data = await generate_max_location(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/daily-first-last-location")
+async def get_daily_first_last_location(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get DailyFirstLastLocation analytics"""
+    try:
+        data = await generate_daily_first_last_location(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

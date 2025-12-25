@@ -14,12 +14,8 @@ async function initializeApp() {
     setupNavigation();
     setupFileUpload();
     setupTabs();
-    loadSuspects();
     setupGeofencing();
     setupWebSocket();
-
-    // Refresh suspects list every 30 seconds
-    setInterval(loadSuspects, 30000);
 }
 
 // Connection Status
@@ -71,9 +67,9 @@ function setupNavigation() {
                 console.error(`View not found: ${viewId}`);
             }
 
-            // Load data for the view
-            if (viewName === 'single-analysis' || viewName === 'multiple-analysis' || viewName === 'utils') {
-                loadSuspects();
+            // Auto-load analysis if session exists
+            if (viewName === 'single-analysis' && window.currentSessionId) {
+                showAnalysisResults(window.currentSessionId);
             }
         });
     });
@@ -145,11 +141,10 @@ async function handleFiles(files) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const inputSuspectName = document.getElementById('suspectName').value || null;
         const autoDetect = document.getElementById('autoDetect').checked;
 
         try {
-            const response = await fetch(`${API_BASE}/upload?auto_detect=${autoDetect}${inputSuspectName ? `&suspect_name=${encodeURIComponent(inputSuspectName)}` : ''}`, {
+            const response = await fetch(`${API_BASE}/upload?auto_detect=${autoDetect}`, {
                 method: 'POST',
                 body: formData
             });
@@ -167,37 +162,37 @@ async function handleFiles(files) {
             }
 
             if (result.success) {
-                const uploadedSuspectName = result.suspect_name || inputSuspectName;
+                const sessionId = result.session_id;
                 resultsDiv.innerHTML += `
                     <div style="margin-bottom: 1rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; color: #10b981;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <span style="font-size: 1.5rem;">✓</span>
-                            <strong style="font-size: 1.1rem;">Upload Successful!</strong>
+                            <strong style="font-size: 1.1rem;">Upload & Analysis Complete!</strong>
                         </div>
                         <div style="margin-bottom: 0.5rem;">
                             <strong>${file.name}</strong>: ${result.message}
                             ${result.format_detected ? `<br><small>Format: ${result.format_detected.vendor || 'Unknown'}</small>` : ''}
                         </div>
-                        ${uploadedSuspectName ? `
                             <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(16, 185, 129, 0.2);">
-                                <p style="margin-bottom: 0.75rem; color: rgba(255, 255, 255, 0.9);">Ready to analyze data for <strong>${uploadedSuspectName}</strong></p>
-                                <button class="btn btn-primary" onclick="goToAnalysis('${uploadedSuspectName}')" style="margin-right: 0.5rem;">
-                                    Analyze ${uploadedSuspectName}
+                            <p style="margin-bottom: 0.75rem; color: rgba(255, 255, 255, 0.9);">Analysis results are ready!</p>
+                            <button class="btn btn-primary" onclick="showAnalysisResults('${sessionId}')" style="margin-right: 0.5rem;">
+                                View Analysis Results
                                 </button>
-                                <button class="btn btn-secondary" onclick="navigateToSingleAnalysis()">
-                                    View All Analysis
+                            <button class="btn btn-secondary" onclick="exportCurrentSession('${sessionId}', 'excel')">
+                                Export to Excel
                                 </button>
                             </div>
-                        ` : `
-                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(16, 185, 129, 0.2);">
-                                <p style="margin-bottom: 0.75rem; color: rgba(255, 255, 255, 0.9);">Next steps:</p>
-                                <button class="btn btn-primary" onclick="navigateToSingleAnalysis()">
-                                    Go to Analysis
-                                </button>
-                            </div>
-                        `}
                     </div>
                 `;
+
+                // Store session_id for later use
+                window.currentSessionId = sessionId;
+
+                // Auto-navigate to analysis view and load results
+                setTimeout(() => {
+                    navigateToSingleAnalysis();
+                    showAnalysisResults(sessionId);
+                }, 1000);
             } else {
                 resultsDiv.innerHTML += `<div style="color: #ef4444;">Error processing ${file.name}: ${result.message || result.detail || 'Unknown error'}</div>`;
             }
@@ -213,85 +208,15 @@ async function handleFiles(files) {
     progressText.textContent = 'Complete!';
     setTimeout(() => {
         progressDiv.style.display = 'none';
-        loadSuspects();
     }, 2000);
 }
 
-// Navigate to single analysis view
+// Navigate to analysis view
 function navigateToSingleAnalysis() {
     const navItem = document.querySelector('[data-view="single-analysis"]');
     if (navItem) {
         navItem.click();
     }
-}
-
-// Navigate to analysis with suspect pre-selected
-function goToAnalysis(suspectName) {
-    // Switch to single analysis view
-    navigateToSingleAnalysis();
-
-    // Wait for view to load, then select suspect and analyze
-    setTimeout(() => {
-        const select = document.getElementById('singleSuspectSelect');
-        if (select) {
-            select.value = suspectName;
-            // Wait a bit more for suspects to load
-            setTimeout(() => {
-                loadSingleAnalysis();
-            }, 500);
-        } else {
-            console.error('Single suspect select not found');
-        }
-    }, 500);
-}
-
-// Load Suspects
-async function loadSuspects() {
-    try {
-        const response = await fetch(`${API_BASE}/suspects`);
-        const data = await response.json();
-
-        if (data.success) {
-            const suspects = data.suspects || [];
-
-            // Update suspects list
-            const suspectsList = document.getElementById('suspectsList');
-            suspectsList.innerHTML = suspects.map(suspect => `
-                <div class="suspect-card" onclick="selectSuspect('${suspect}')">
-                    <strong>${suspect}</strong>
-                </div>
-            `).join('');
-
-            // Update select dropdowns
-            const selects = ['singleSuspectSelect', 'exportSuspectSelect', 'geofenceSuspect'];
-            selects.forEach(selectId => {
-                const select = document.getElementById(selectId);
-                if (select) {
-                    const currentValue = select.value;
-                    select.innerHTML = '<option value="">-- Select Suspect --</option>' +
-                        suspects.map(s => `<option value="${s}" ${s === currentValue ? 'selected' : ''}>${s}</option>`).join('');
-                }
-            });
-
-            // Update multi-select
-            const multiSelect = document.getElementById('multipleSuspectSelect');
-            if (multiSelect) {
-                multiSelect.innerHTML = suspects.map(suspect => `
-                    <div class="multi-select-item" onclick="toggleSuspectSelection(this, '${suspect}')">
-                        <input type="checkbox" id="suspect_${suspect}" value="${suspect}">
-                        <label for="suspect_${suspect}">${suspect}</label>
-                    </div>
-                `).join('');
-            }
-        }
-    } catch (error) {
-        console.error('Error loading suspects:', error);
-    }
-}
-
-function selectSuspect(suspect) {
-    document.getElementById('singleSuspectSelect').value = suspect;
-    loadSingleAnalysis();
 }
 
 let selectedSuspects = [];
@@ -319,36 +244,511 @@ function setupTabs() {
         btn.addEventListener('click', () => {
             const tabName = btn.dataset.tab;
 
-            // Update active tab button
-            tabBtns.forEach(b => b.classList.remove('active'));
+            // Update active tab button (only within the same view)
+            const view = btn.closest('.view');
+            if (view) {
+                view.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
             // Show corresponding tab content
-            const tabContents = btn.closest('.view').querySelectorAll('.tab-content');
-            tabContents.forEach(content => content.classList.remove('active'));
+                view.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-            const targetTab = document.getElementById(`${tabName}Tab`);
+                // Handle kebab-case to camelCase conversion for tab IDs
+                // Special cases: max-call -> maxCall, max-circle-call -> maxCircleCall, etc.
+                let tabId;
+                if (tabName.includes('-')) {
+                    const parts = tabName.split('-');
+                    tabId = parts[0] + parts.slice(1).map(word =>
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join('') + 'Tab';
+                } else {
+                    tabId = tabName + 'Tab';
+                }
+
+                const targetTab = document.getElementById(tabId);
             if (targetTab) {
                 targetTab.classList.add('active');
+                } else {
+                    console.warn(`Tab content not found: ${tabId} (from tab: ${tabName})`);
+                }
             }
         });
     });
 }
 
-// Single Analysis
-async function loadSingleAnalysis() {
-    const suspect = document.getElementById('singleSuspectSelect').value;
-    if (!suspect) {
-        alert('Please select a suspect');
+// Show analysis results for current session
+async function showAnalysisResults(sessionId) {
+    if (!sessionId) {
+        sessionId = window.currentSessionId;
+    }
+
+    if (!sessionId) {
+        alert('No analysis data available. Please upload a file first.');
         return;
     }
 
-    // Load all analyses
-    loadImeiAnalysis(suspect);
-    loadTowerAnalysis(suspect);
-    loadContactAnalysis(suspect);
-    loadSmsAnalysis(suspect);
-    loadInternationalAnalysis(suspect);
+    // Load comprehensive analytics
+    loadSummary(sessionId);
+    loadCorrected(sessionId);
+    loadMaxCall(sessionId);
+    loadMaxCircleCall(sessionId);
+    loadDailyFirstLast(sessionId);
+    loadMaxDuration(sessionId);
+    loadMaxIMEI(sessionId);
+    loadDailyIMEITracking(sessionId);
+    loadMaxLocation(sessionId);
+    loadDailyFirstLastLocation(sessionId);
+}
+
+// Single Analysis (legacy - kept for compatibility)
+async function loadSingleAnalysis() {
+    const sessionId = window.currentSessionId;
+    if (!sessionId) {
+        alert('No data available. Please upload a file first.');
+        return;
+    }
+    showAnalysisResults(sessionId);
+}
+
+// Comprehensive Analytics Functions
+async function loadSummary(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/summary?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('summaryContent');
+            const summary = data.data;
+
+            content.innerHTML = `
+                <div class="stats-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card">
+                        <div class="stat-value">${summary.total_calls || 0}</div>
+                        <div class="stat-label">Total Calls</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${summary.incoming_count || 0}</div>
+                        <div class="stat-label">Incoming Calls</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${summary.outgoing_count || 0}</div>
+                        <div class="stat-label">Outgoing Calls</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${summary.unique_b_numbers || 0}</div>
+                        <div class="stat-label">Unique B-Numbers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${summary.unique_imeis || 0}</div>
+                        <div class="stat-label">Unique IMEIs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${summary.unique_locations || 0}</div>
+                        <div class="stat-label">Unique Locations</div>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>First Activity Date</td><td>${summary.first_activity_date || 'N/A'}</td></tr>
+                        <tr><td>Last Activity Date</td><td>${summary.last_activity_date || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading summary:', error);
+    }
+}
+
+async function loadCorrected(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/corrected?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('correctedContent');
+            const records = data.data || [];
+
+            if (records.length === 0) {
+                content.innerHTML = '<p>No corrected records found</p>';
+                return;
+            }
+
+            content.innerHTML = `
+                <p style="margin-bottom: 1rem;">Total Corrected Records: ${records.length}</p>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Record ID</th>
+                                <th>MSISDN A</th>
+                                <th>MSISDN B</th>
+                                <th>Call Type</th>
+                                <th>Call Date</th>
+                                <th>Call Start Time</th>
+                                <th>Duration (sec)</th>
+                                <th>IMEI</th>
+                                <th>Cell ID</th>
+                                <th>Operator</th>
+                                <th>Circle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${records.slice(0, 100).map(record => `
+                                <tr>
+                                    <td><code>${record.record_id || ''}</code></td>
+                                    <td><code>${record.msisdn_a || ''}</code></td>
+                                    <td><code>${record.msisdn_b || ''}</code></td>
+                                    <td>${record.call_type || ''}</td>
+                                    <td>${record.call_date || ''}</td>
+                                    <td>${record.call_start_time || ''}</td>
+                                    <td>${record.call_duration_sec || 0}</td>
+                                    <td><code>${record.imei || ''}</code></td>
+                                    <td>${record.cell_id || ''}</td>
+                                    <td>${record.operator || ''}</td>
+                                    <td>${record.circle || ''}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${records.length > 100 ? `<p style="margin-top: 1rem; color: #888;">Showing first 100 of ${records.length} records</p>` : ''}
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading corrected:', error);
+    }
+}
+
+async function loadMaxCall(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/max-call?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('maxCallContent');
+            const maxCall = data.data;
+
+            content.innerHTML = `
+                <div class="stat-card" style="max-width: 400px;">
+                    <div class="stat-value">${maxCall.total_call_count || 0}</div>
+                    <div class="stat-label">Total Calls</div>
+                </div>
+                <table class="data-table" style="margin-top: 2rem;">
+                    <thead>
+                        <tr>
+                            <th>B-Number</th>
+                            <th>Call Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>${maxCall.b_number || 'N/A'}</code></td>
+                            <td>${maxCall.total_call_count || 0}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading max call:', error);
+    }
+}
+
+async function loadMaxCircleCall(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/max-circle-call?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('maxCircleCallContent');
+            const maxCircle = data.data;
+
+            content.innerHTML = `
+                <div class="stat-card" style="max-width: 400px;">
+                    <div class="stat-value">${maxCircle.activity_count || 0}</div>
+                    <div class="stat-label">Activity Count</div>
+                </div>
+                <table class="data-table" style="margin-top: 2rem;">
+                    <thead>
+                        <tr>
+                            <th>Circle/State</th>
+                            <th>Activity Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>${maxCircle.circle || 'N/A'}</td>
+                            <td>${maxCircle.activity_count || 0}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading max circle call:', error);
+    }
+}
+
+async function loadDailyFirstLast(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/daily-first-last?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('dailyFirstLastContent');
+            const dailyData = data.data || [];
+
+            if (dailyData.length === 0) {
+                content.innerHTML = '<p>No daily call data found</p>';
+                return;
+            }
+
+            content.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>First Call Time</th>
+                            <th>First Call B-Number</th>
+                            <th>Last Call Time</th>
+                            <th>Last Call B-Number</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dailyData.map(item => `
+                            <tr>
+                                <td>${item.date || ''}</td>
+                                <td>${item.first_call_time || ''}</td>
+                                <td><code>${item.first_call_b_number || ''}</code></td>
+                                <td>${item.last_call_time || ''}</td>
+                                <td><code>${item.last_call_b_number || ''}</code></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading daily first last:', error);
+    }
+}
+
+async function loadMaxDuration(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/max-duration?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('maxDurationContent');
+            const maxDuration = data.data;
+
+            const durationMinutes = ((maxDuration.duration_seconds || 0) / 60).toFixed(2);
+
+            content.innerHTML = `
+                <div class="stat-card" style="max-width: 400px;">
+                    <div class="stat-value">${durationMinutes}</div>
+                    <div class="stat-label">Duration (minutes)</div>
+                </div>
+                <table class="data-table" style="margin-top: 2rem;">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>B-Number</td><td><code>${maxDuration.b_number || 'N/A'}</code></td></tr>
+                        <tr><td>Duration (seconds)</td><td>${maxDuration.duration_seconds || 0}</td></tr>
+                        <tr><td>Date</td><td>${maxDuration.date || 'N/A'}</td></tr>
+                        <tr><td>Call Start Time</td><td>${maxDuration.call_start_time || 'N/A'}</td></tr>
+                        <tr><td>Cell ID</td><td>${maxDuration.cell_id || 'N/A'}</td></tr>
+                        <tr><td>Location Description</td><td>${maxDuration.location_description || 'N/A'}</td></tr>
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading max duration:', error);
+    }
+}
+
+async function loadMaxIMEI(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/max-imei?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('maxImeiContent');
+            const maxIMEI = data.data;
+
+            content.innerHTML = `
+                <div class="stats-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card">
+                        <div class="stat-value">${maxIMEI.max_imei_call_count || 0}</div>
+                        <div class="stat-label">Max IMEI Call Count</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${maxIMEI.total_imeis || 0}</div>
+                        <div class="stat-label">Total IMEIs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${maxIMEI.multi_device_usage ? 'Yes' : 'No'}</div>
+                        <div class="stat-label">Multi-Device Usage</div>
+                    </div>
+                </div>
+                <h4 style="margin-bottom: 1rem;">Max IMEI: <code>${maxIMEI.max_imei || 'N/A'}</code></h4>
+                <h4 style="margin-bottom: 1rem; margin-top: 2rem;">IMEI Ranking</h4>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>IMEI</th>
+                            <th>Call Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${maxIMEI.imei_ranking.map((item, idx) => `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td><code>${item.imei || ''}</code></td>
+                                <td>${item.call_count || 0}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading max IMEI:', error);
+    }
+}
+
+async function loadDailyIMEITracking(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/daily-imei-tracking?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('dailyImeiTrackingContent');
+            const dailyData = data.data || [];
+
+            if (dailyData.length === 0) {
+                content.innerHTML = '<p>No daily IMEI tracking data found</p>';
+                return;
+            }
+
+            content.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>IMEI</th>
+                            <th>Call Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dailyData.flatMap(item =>
+                            (item.imeis || []).map(imeiData => `
+                                <tr>
+                                    <td>${item.date || ''}</td>
+                                    <td><code>${imeiData.imei || ''}</code></td>
+                                    <td>${imeiData.call_count || 0}</td>
+                                </tr>
+                            `)
+                        ).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading daily IMEI tracking:', error);
+    }
+}
+
+async function loadMaxLocation(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/max-location?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('maxLocationContent');
+            const maxLocation = data.data;
+
+            content.innerHTML = `
+                <div class="stat-card" style="max-width: 400px;">
+                    <div class="stat-value">${maxLocation.usage_count || 0}</div>
+                    <div class="stat-label">Usage Count</div>
+                </div>
+                <table class="data-table" style="margin-top: 2rem;">
+                    <thead>
+                        <tr>
+                            <th>Cell ID</th>
+                            <th>Usage Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>${maxLocation.cell_id || 'N/A'}</td>
+                            <td>${maxLocation.usage_count || 0}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading max location:', error);
+    }
+}
+
+async function loadDailyFirstLastLocation(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/daily-first-last-location?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const content = document.getElementById('dailyFirstLastLocationContent');
+            const dailyData = data.data || [];
+
+            if (dailyData.length === 0) {
+                content.innerHTML = '<p>No daily location data found</p>';
+                return;
+            }
+
+            content.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>First Location Cell ID</th>
+                            <th>First Location Time</th>
+                            <th>Last Location Cell ID</th>
+                            <th>Last Location Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dailyData.map(item => `
+                            <tr>
+                                <td>${item.date || ''}</td>
+                                <td>${item.first_location?.cell_id || ''}</td>
+                                <td>${item.first_location?.time || ''}</td>
+                                <td>${item.last_location?.cell_id || ''}</td>
+                                <td>${item.last_location?.time || ''}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading daily first last location:', error);
+    }
 }
 
 async function loadImeiAnalysis(suspect) {
@@ -1067,7 +1467,7 @@ async function generateSampleData() {
 
         if (data.success) {
             resultDiv.innerHTML = `<div style="color: #10b981;">✓ Generated ${data.records_generated} sample records for ${suspectName}</div>`;
-            loadSuspects();
+            // Removed loadSuspects - no longer needed
         } else {
             resultDiv.innerHTML = `<div style="color: #ef4444;">Error: ${data.message || 'Unknown error'}</div>`;
         }
@@ -1076,22 +1476,31 @@ async function generateSampleData() {
     }
 }
 
-async function exportData(format = 'json') {
-    const suspect = document.getElementById('exportSuspectSelect').value;
+async function exportCurrentSession(sessionId, format = 'excel') {
+    if (!sessionId) {
+        sessionId = window.currentSessionId;
+    }
 
-    if (!suspect) {
-        alert('Please select a suspect');
+    if (!sessionId) {
+        alert('No session data available. Please upload a file first.');
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE}/export/${encodeURIComponent(suspect)}?format=${format}`);
+        const response = await fetch(`${API_BASE}/export?format=${format}&session_id=${encodeURIComponent(sessionId)}`);
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Export failed');
+        }
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const extension = format === 'csv' ? 'csv' : 'json';
-        a.download = `${suspect}_cdr_export.${extension}`;
+        let extension = 'json';
+        if (format === 'csv') extension = 'csv';
+        else if (format === 'excel' || format === 'xlsx') extension = 'xlsx';
+        else if (format === 'kml') extension = 'kml';
+        a.download = `cdr_analysis.${extension}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

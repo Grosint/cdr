@@ -19,28 +19,52 @@ class CallStatus(str, Enum):
     BUSY = "busy"
 
 class CDRRecord(BaseModel):
-    """CDR Record Model"""
+    """CDR Record Model - Canonical Normalized Schema"""
+    # Core identifiers
+    record_id: Optional[str] = None
     call_id: Optional[str] = None
-    calling_number: str
-    called_number: str
-    call_start_time: datetime
+
+    # Phone numbers
+    msisdn_a: Optional[str] = None  # Calling number (A-party)
+    msisdn_b: Optional[str] = None  # Called number (B-party)
+    calling_number: Optional[str] = None  # Legacy field
+    called_number: Optional[str] = None  # Legacy field
+
+    # Call metadata
+    call_type: CallType = CallType.VOICE  # incoming | outgoing | sms | data
+    call_date: Optional[str] = None  # YYYY-MM-DD
+    call_start_time: Optional[datetime] = None
     call_end_time: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
-    call_type: CallType = CallType.VOICE
-    direction: CallDirection = CallDirection.OUTGOING
-    cell_tower_id: Optional[str] = None
-    location_lat: Optional[float] = None
-    location_lon: Optional[float] = None
-    lac: Optional[int] = None  # Location Area Code
-    mnc: Optional[int] = None  # Mobile Network Code
-    mcc: Optional[int] = None  # Mobile Country Code
+    call_duration_sec: Optional[float] = None
+    duration_seconds: Optional[float] = None  # Legacy field
+
+    # Device identifiers
     imei: Optional[str] = None
     imsi: Optional[str] = None
+
+    # Location data
+    cell_id: Optional[str] = None
+    cell_tower_id: Optional[str] = None  # Legacy field
+    lac: Optional[int] = None  # Location Area Code
+    location_lat: Optional[float] = None
+    location_lon: Optional[float] = None
+
+    # Network data
+    operator: Optional[str] = None
+    circle: Optional[str] = None
+    mnc: Optional[int] = None  # Mobile Network Code
+    mcc: Optional[int] = None  # Mobile Country Code
+
+    # Additional metadata
+    location_description: Optional[str] = None
+    raw_row_reference: Optional[str] = None  # Reference to original row
+    direction: CallDirection = CallDirection.OUTGOING
     cost: Optional[float] = None
     data_volume_mb: Optional[float] = None
     call_status: CallStatus = CallStatus.COMPLETED
     sms_content: Optional[str] = None
     suspect_name: Optional[str] = None
+    session_id: Optional[str] = None  # Primary identifier for each upload session
 
     class Config:
         json_encoders = {
