@@ -99,9 +99,14 @@
 
             <!-- Analysis View -->
             <div class="view" id="singleAnalysisView" style="display: none;">
-                <div class="view-header">
-                    <h2>CDR Analysis Results</h2>
-                    <p>Comprehensive analysis of uploaded CDR data</p>
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>CDR Analysis Results</h2>
+                        <p>Comprehensive analysis of uploaded CDR data</p>
+                    </div>
+                    <button class="btn btn-primary" id="advancedBtn" onclick="showAdvancedDashboard()" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);">
+                        🧠 Advanced Intelligence Dashboard
+                    </button>
                 </div>
 
                 <div class="analysis-tabs">
@@ -237,6 +242,133 @@
                     <div class="glass-card">
                         <h3>International Calls</h3>
                         <div id="internationalContent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Intelligence Dashboard View -->
+            <div class="view" id="advancedDashboardView" style="display: none;">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>🧠 Intelligence Dashboard</h2>
+                        <p>Advanced CDR analysis with intelligence-grade insights</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="hideAdvancedDashboard()">
+                        ← Back to Standard View
+                    </button>
+                </div>
+
+                <!-- Filters Header -->
+                <div class="glass-card" id="caseHeader" style="margin-bottom: 1.5rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">CASE ID</label>
+                            <div style="font-size: 1.1rem; font-weight: 600;" id="caseId">CDR_INV_2025_001</div>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">TARGET MSISDN</label>
+                            <div style="font-size: 1.1rem; font-weight: 600;" id="targetMsisdn">--</div>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">STATUS</label>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: #10b981;" id="caseStatus">ACTIVE</div>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">START DATE</label>
+                            <input type="date" id="dateRangeStart" class="select-input" style="width: 100%;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">END DATE</label>
+                            <input type="date" id="dateRangeEnd" class="select-input" style="width: 100%;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">ACTIONS</label>
+                            <button class="btn btn-primary" onclick="applyAdvancedFilters()" style="width: 100%;">Apply Filters</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Grid Layout -->
+                <div class="advanced-dashboard-grid">
+                    <!-- Overview KPIs -->
+                    <div class="glass-card">
+                        <h3>📊 Overview KPIs</h3>
+                        <div class="stats-grid" id="overviewKpis" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));"></div>
+                    </div>
+
+                    <!-- Intelligence Story -->
+                    <div class="glass-card">
+                        <h3>📖 Intelligence Story</h3>
+                        <div id="intelligenceStory" style="color: var(--text-secondary); line-height: 1.6; min-height: 100px;"></div>
+                    </div>
+
+                    <!-- Active Alerts -->
+                    <div class="glass-card">
+                        <h3>⚠️ Active Alerts</h3>
+                        <div id="activeAlerts" style="max-height: 300px; overflow-y: auto;"></div>
+                    </div>
+
+                    <!-- Contact Network Graph -->
+                    <div class="glass-card">
+                        <h3>🕸️ Contact Network Graph</h3>
+                        <div id="networkGraphContainer" class="network-container" style="height: 500px;"></div>
+                    </div>
+
+                    <!-- Temporal Activity Heatmap -->
+                    <div class="glass-card">
+                        <h3>⏱️ Temporal Activity Heatmap</h3>
+                        <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="tab-btn active" onclick="toggleHeatmapType('all')">All</button>
+                            <button class="tab-btn" onclick="toggleHeatmapType('incoming')">Incoming</button>
+                            <button class="tab-btn" onclick="toggleHeatmapType('outgoing')">Outgoing</button>
+                            <button class="tab-btn" onclick="toggleHeatmapType('sms')">SMS</button>
+                        </div>
+                        <div id="heatmapContainer" style="height: 400px;"></div>
+                    </div>
+
+                    <!-- IMEI Switch & Device Behavior -->
+                    <div class="glass-card">
+                        <h3>📱 IMEI Switch & Device Behavior</h3>
+                        <div id="imeiTimelineContainer" style="height: 350px; margin-bottom: 1rem;"></div>
+                        <div id="imeiDetails" style="max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+
+                    <!-- Geo-Spatial Movement Map -->
+                    <div class="glass-card">
+                        <h3>🗺️ Geo-Spatial Movement Map</h3>
+                        <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="tab-btn active" onclick="toggleLocationLayer('day')">Day-wise</button>
+                            <button class="tab-btn" onclick="toggleLocationLayer('imei')">IMEI-wise</button>
+                            <button class="tab-btn" onclick="toggleLocationLayer('contact')">Contact-wise</button>
+                        </div>
+                        <div id="movementMap" class="map-container" style="height: 400px;"></div>
+                    </div>
+
+                    <!-- Co-location Analysis -->
+                    <div class="glass-card">
+                        <h3>👥 Co-location Analysis</h3>
+                        <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <label style="margin: 0;">Time Window: </label>
+                            <select id="colocationWindow" class="select-input" style="width: auto;">
+                                <option value="15">±15 minutes</option>
+                                <option value="30">±30 minutes</option>
+                                <option value="60">±1 hour</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="analyzeColocation()">Analyze</button>
+                        </div>
+                        <div id="colocationResults" style="max-height: 300px; overflow-y: auto;"></div>
+                    </div>
+
+                    <!-- Anomaly & Alert Panel -->
+                    <div class="glass-card">
+                        <h3>🧨 Anomaly & Alert Panel</h3>
+                        <div id="anomaliesList" style="max-height: 400px; overflow-y: auto;"></div>
+                    </div>
+
+                    <!-- Audit Trail -->
+                    <div class="glass-card">
+                        <h3>🔍 Forensic / Audit View</h3>
+                        <div id="auditTrail" style="max-height: 400px; overflow-y: auto;"></div>
                     </div>
                 </div>
             </div>

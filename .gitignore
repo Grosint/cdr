@@ -18,3 +18,4 @@ node_modules/
 dist/
 build/
 *.egg-info/
+to_be_deleted/

@@ -86,7 +86,10 @@ def clean_value(value):
         return None
     if isinstance(value, str):
         value = value.strip()
-        if value.lower() in ['nan', 'none', 'null', '']:
+        # Remove surrounding quotes if present
+        if (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')):
+            value = value[1:-1].strip()
+        if value.lower() in ['nan', 'none', 'null', '', '-', '---']:
             return None
     return value
 
@@ -106,7 +109,7 @@ def parse_datetime(value) -> Optional[datetime]:
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d %H:%M:%S.%f",
-        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S",  # DD/MM/YYYY HH:MM:SS
         "%m/%d/%Y %H:%M:%S",
         "%d-%m-%Y %H:%M:%S",  # DD-MM-YYYY HH:MM:SS
         "%Y-%m-%d",
@@ -114,6 +117,12 @@ def parse_datetime(value) -> Optional[datetime]:
         "%m/%d/%Y",
         "%d-%m-%Y"  # DD-MM-YYYY
     ]
+
+    # If value is a string, try to clean it first (remove quotes)
+    if isinstance(value, str):
+        value = value.strip()
+        if (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')):
+            value = value[1:-1].strip()
 
     for fmt in formats:
         try:
@@ -218,6 +227,7 @@ async def process_cdr_file(
                 # Check if values look like column headers
                 score = 0
                 valid_names = 0
+                row_values = []
                 for val in row.values:
                     if pd.notna(val):
                         val_str = str(val).strip()
@@ -227,6 +237,7 @@ async def process_cdr_file(
                                 if not val_str.replace('-', '').replace('_', '').strip() == '':
                                     if not val_str.replace('-', '').replace('_', '').replace('=', '').strip() == '':
                                         valid_names += 1
+                                        row_values.append(val_str)
                                         # Bonus for common CDR column name patterns
                                         val_lower = val_str.lower()
                                         if any(keyword in val_lower for keyword in ['number', 'time', 'date', 'duration', 'call', 'msisdn', 'imei', 'imsi', 'cell', 'tower', 'location']):
@@ -295,6 +306,10 @@ async def process_cdr_file(
             elif "call date" in col_normalized or ("date" in col_normalized and "time" not in col_normalized):
                 if "call_date" not in column_mapping:
                     column_mapping["call_date"] = col
+            elif ("time" in col_normalized and "date" not in col_normalized and "initiation" not in col_normalized) or col_normalized == "time":
+                # Map standalone "Time" column to call_start_time for combination with date
+                if "call_start_time" not in column_mapping:
+                    column_mapping["call_start_time"] = col
             elif "duration" in col_normalized:
                 if "duration_seconds" not in column_mapping:
                     column_mapping["duration_seconds"] = col
@@ -422,7 +437,16 @@ async def process_cdr_file(
                 if "calling_number" in record_data:
                     record_data["calling_number"] = normalize_phone_number(record_data["calling_number"])
                 if "called_number" in record_data:
-                    record_data["called_number"] = normalize_phone_number(record_data["called_number"])
+                    called_num = normalize_phone_number(record_data["called_number"])
+                    # Skip rows where called_number is a text code (not a phone number)
+                    # Text codes typically contain letters, dashes, or are very short
+                    if called_num and len(called_num) > 0:
+                        # Check if it looks like a phone number (mostly digits, possibly with +)
+                        if not re.match(r'^\+?\d{6,}$', called_num):
+                            # Not a valid phone number format - might be a code like "AD-Airtel"
+                            # Set to None so validation will catch it
+                            called_num = None
+                    record_data["called_number"] = called_num
 
                 # Infer call type and direction
                 if "call_type" not in record_data:
@@ -491,8 +515,15 @@ async def process_cdr_file(
                 for field in ["duration_seconds", "cost", "data_volume_mb"]:
                     if field in record_data and record_data[field] is not None:
                         try:
-                            record_data[field] = float(record_data[field])
-                        except:
+                            # Handle string values that might be "None" or empty
+                            if isinstance(record_data[field], str):
+                                if record_data[field].strip().lower() in ['none', 'nan', '', '-']:
+                                    record_data[field] = None
+                                else:
+                                    record_data[field] = float(record_data[field])
+                            else:
+                                record_data[field] = float(record_data[field])
+                        except (ValueError, TypeError):
                             record_data[field] = None
 
                 for field in ["location_lat", "location_lon"]:

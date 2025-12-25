@@ -75,6 +75,16 @@ from utils import generate_sample_data, export_to_json, export_to_csv
 from pdf_export import create_pdf_report
 from kml_export import export_to_kml
 from geofencing import router as geofencing_router, manager as geofence_manager
+from intelligence_analytics import (
+    generate_intelligence_overview,
+    generate_contact_network,
+    generate_temporal_heatmap,
+    generate_imei_timeline,
+    generate_movement_map,
+    generate_colocation_analysis,
+    generate_anomalies,
+    generate_audit_trail
+)
 
 # Create uploads directory (use absolute path)
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
@@ -522,6 +532,97 @@ async def get_daily_first_last_location(session_id: Optional[str] = None, suspec
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/export-pdf-session")
+async def export_pdf_report_session(session_id: Optional[str] = None):
+    """Export comprehensive PDF report for session with all analysis tabs"""
+    try:
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id is required")
+
+        # Generate all analytics for the session
+        from cdr_analytics import generate_all_analytics
+        all_analytics = await generate_all_analytics(session_id=session_id)
+
+        # Get summary data
+        summary_data = all_analytics.get("Summary", {})
+
+        # Calculate additional statistics
+        from database import get_database
+        db = await get_database()
+
+        total_records = summary_data.get("total_calls", 0)
+        date_range = f"{summary_data.get('first_activity_date', 'N/A')} to {summary_data.get('last_activity_date', 'N/A')}"
+
+        # Get IMEI, towers, contacts, SMS, and international data if available
+        # For session-based, we'll use the analytics data we already have
+        imei_data = {}
+        towers_data = {}
+        contacts_data = {}
+        sms_data = {}
+        intl_data = {}
+
+        # Try to get suspect name from session to fetch detailed analytics
+        session_record = await db.cdr_records.find_one({"session_id": session_id})
+        suspect_name = session_record.get("suspect_name") if session_record else None
+
+        if suspect_name:
+            try:
+                imei_data = await analyze_imei(suspect_name)
+                towers_data = await analyze_cell_towers(suspect_name)
+                contacts_data = await analyze_contacts(suspect_name)
+                sms_data = await analyze_sms_services(suspect_name)
+                intl_data = await analyze_international_calls(suspect_name)
+            except:
+                pass  # If detailed analytics fail, use summary data only
+
+        # Calculate total duration
+        duration_pipeline = [
+            {"$match": {"session_id": session_id}},
+            {"$group": {
+                "_id": None,
+                "total_duration": {"$sum": "$duration_seconds"}
+            }}
+        ]
+        duration_result = await db.cdr_records.aggregate(duration_pipeline).to_list(length=1)
+        total_duration_hours = (duration_result[0].get('total_duration', 0) or 0) / 3600 if duration_result else 0
+
+        unique_contacts = len(contacts_data.get('most_called', [])) if contacts_data else summary_data.get("unique_b_numbers", 0)
+
+        analytics_data = {
+            "summary": {
+                "total_records": total_records,
+                "date_range": date_range,
+                "unique_contacts": unique_contacts,
+                "total_duration_hours": total_duration_hours,
+                "unique_imeis": summary_data.get("unique_imeis", 0),
+                "unique_towers": summary_data.get("unique_locations", 0)
+            },
+            "imei": imei_data,
+            "towers": towers_data,
+            "contacts": contacts_data,
+            "sms": sms_data,
+            "international": intl_data
+        }
+
+        # Create PDF
+        exports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        pdf_path = os.path.join(exports_dir, f"session_{session_id}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
+
+        report_name = f"Session {session_id}" if not suspect_name else suspect_name
+        create_pdf_report(report_name, analytics_data, pdf_path)
+
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"cdr_analysis_{session_id}_report.pdf"
+        )
+    except Exception as e:
+        import traceback
+        print(f"Error generating PDF: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/export-pdf/{suspect_name}")
 async def export_pdf_report(suspect_name: str):
     """Export comprehensive PDF report for suspect"""
@@ -593,6 +694,87 @@ async def export_pdf_report(suspect_name: str):
         import traceback
         print(f"Error generating PDF: {e}")
         print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Intelligence-Grade Analytics Endpoints
+@app.get("/api/analytics/intelligence/overview")
+async def get_intelligence_overview(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get intelligence overview with KPIs, story, and alerts"""
+    try:
+        data = await generate_intelligence_overview(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/network")
+async def get_intelligence_network(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get contact network graph"""
+    try:
+        data = await generate_contact_network(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/timeline")
+async def get_intelligence_timeline(session_id: Optional[str] = None, suspect_name: Optional[str] = None, call_type: str = "all"):
+    """Get temporal activity heatmap"""
+    try:
+        data = await generate_temporal_heatmap(session_id=session_id, suspect_name=suspect_name, call_type=call_type)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/imei")
+async def get_intelligence_imei(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get IMEI switch timeline"""
+    try:
+        data = await generate_imei_timeline(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/location")
+async def get_intelligence_location(session_id: Optional[str] = None, suspect_name: Optional[str] = None, layer: str = "day"):
+    """Get geo-spatial movement map"""
+    try:
+        data = await generate_movement_map(session_id=session_id, suspect_name=suspect_name, layer=layer)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/colocation")
+async def get_intelligence_colocation(session_id: Optional[str] = None, suspect_name: Optional[str] = None, window_minutes: int = 15):
+    """Get co-location analysis"""
+    try:
+        data = await generate_colocation_analysis(session_id=session_id, suspect_name=suspect_name, window_minutes=window_minutes)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/anomalies")
+async def get_intelligence_anomalies(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get anomaly detection results"""
+    try:
+        data = await generate_anomalies(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/intelligence/audit")
+async def get_intelligence_audit(session_id: Optional[str] = None, suspect_name: Optional[str] = None):
+    """Get forensic audit trail"""
+    try:
+        data = await generate_audit_trail(session_id=session_id, suspect_name=suspect_name)
+        data = convert_datetime_to_str(data)
+        return {"success": True, "data": data}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Catch-all route for frontend files (must be after all API routes)

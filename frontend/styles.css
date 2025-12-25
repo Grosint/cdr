@@ -139,6 +139,8 @@ body {
     margin-left: 280px;
     padding: 2rem 3rem;
     min-height: 100vh;
+    overflow-x: visible;
+    min-width: 0;
 }
 
 .view-header {
@@ -171,6 +173,29 @@ body {
     margin-bottom: 2rem;
     box-shadow: var(--shadow);
     transition: all 0.3s ease;
+    overflow: visible;
+    min-width: 0;
+}
+
+/* Ensure tab content allows horizontal scrolling */
+.tab-content {
+    display: none;
+    overflow: visible;
+    min-width: 0;
+}
+
+.tab-content.active {
+    display: block;
+    overflow: visible;
+}
+
+/* Ensure content divs don't constrain width */
+#correctedContent,
+#summaryContent,
+#maxCallContent {
+    overflow: visible;
+    min-width: 0;
+    width: 100%;
 }
 
 .glass-card:hover {
@@ -393,14 +418,6 @@ body {
     border-color: transparent;
 }
 
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-}
-
 /* Maps */
 .map-container {
     width: 100%;
@@ -425,6 +442,55 @@ body {
     width: 100%;
     border-collapse: collapse;
     margin-top: 1rem;
+    min-width: 100%;
+}
+
+/* Table container with horizontal scroll */
+.table-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+    display: block;
+    position: relative;
+}
+
+/* Override data-table width when inside table-container */
+.table-container .data-table {
+    width: auto !important;
+    min-width: 100%;
+    margin-top: 0;
+}
+
+.table-container::-webkit-scrollbar {
+    height: 12px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Ensure tables can scroll horizontally when content is wide */
+.data-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.data-table-wrapper .data-table {
+    min-width: 100%;
 }
 
 .data-table th,
@@ -572,4 +638,124 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
+}
+
+/* Advanced Intelligence Dashboard Styles */
+.advanced-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 1200px) {
+    .advanced-dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.advanced-dashboard-grid .glass-card {
+    margin: 0;
+}
+
+.advanced-dashboard-grid .glass-card h3 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.alert-item {
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid #ef4444;
+    border-radius: 8px;
+}
+
+.alert-item.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-left-color: #f59e0b;
+}
+
+.alert-item.info {
+    background: rgba(59, 130, 246, 0.1);
+    border-left-color: #3b82f6;
+}
+
+.alert-item h5 {
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.alert-item p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.alert-item .evidence {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.colocation-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 12px;
+}
+
+.colocation-item.high-risk {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.colocation-item h4 {
+    color: #10b981;
+    margin-bottom: 0.5rem;
+}
+
+.colocation-item.high-risk h4 {
+    color: #ef4444;
+}
+
+.colocation-item ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+}
+
+.colocation-item li {
+    padding: 0.25rem 0;
+    color: var(--text-secondary);
+}
+
+.risk-flag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.risk-flag.high {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.risk-flag.medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.risk-flag.low {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }

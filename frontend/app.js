@@ -105,13 +105,18 @@ function setupFileUpload() {
         uploadArea.classList.remove('dragover');
         const files = e.dataTransfer.files;
         if (files.length > 0) {
-            handleFiles(files);
+            // Convert FileList to Array for consistent handling
+            const filesArray = Array.from(files);
+            handleFiles(filesArray);
         }
     });
 
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            handleFiles(e.target.files);
+            const files = Array.from(e.target.files); // Create a copy of the file list
+            // Reset the input so the same file can be selected again
+            e.target.value = '';
+            handleFiles(files);
         }
     });
 }
@@ -123,10 +128,16 @@ async function handleFiles(files) {
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
     const resultsDiv = document.getElementById('uploadResults');
+    const fileInput = document.getElementById('fileInput');
 
     if (!progressDiv || !progressFill || !progressText || !resultsDiv) {
         console.error('Upload UI elements not found');
         return;
+    }
+
+    // Reset file input to allow selecting the same file again
+    if (fileInput) {
+        fileInput.value = '';
     }
 
     progressDiv.style.display = 'block';
@@ -321,6 +332,14 @@ async function loadSummary(sessionId) {
             const summary = data.data;
 
             content.innerHTML = `
+                <div style="margin-bottom: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="exportCurrentSession('${sessionId}', 'excel')" style="background: linear-gradient(135deg, #10b981, #059669);">
+                        📊 Export to Excel (All Sheets)
+                    </button>
+                    <button class="btn btn-primary" onclick="exportCurrentSessionPDF('${sessionId}')" style="background: linear-gradient(135deg, #ec4899, #8b5cf6);">
+                        📄 Export to PDF (All Results)
+                    </button>
+                </div>
                 <div class="stats-grid" style="margin-bottom: 2rem;">
                     <div class="stat-card">
                         <div class="stat-value">${summary.total_calls || 0}</div>
@@ -347,18 +366,20 @@ async function loadSummary(sessionId) {
                         <div class="stat-label">Unique Locations</div>
                     </div>
                 </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Metric</th>
-                            <th>Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td>First Activity Date</td><td>${summary.first_activity_date || 'N/A'}</td></tr>
-                        <tr><td>Last Activity Date</td><td>${summary.last_activity_date || 'N/A'}</td></tr>
-                    </tbody>
-                </table>
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>First Activity Date</td><td>${summary.first_activity_date || 'N/A'}</td></tr>
+                            <tr><td>Last Activity Date</td><td>${summary.last_activity_date || 'N/A'}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             `;
         }
     } catch (error) {
@@ -382,37 +403,37 @@ async function loadCorrected(sessionId) {
 
             content.innerHTML = `
                 <p style="margin-bottom: 1rem;">Total Corrected Records: ${records.length}</p>
-                <div style="overflow-x: auto;">
-                    <table class="data-table">
+                <div class="table-container" style="border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;">
+                    <table class="data-table" style="min-width: 1200px; white-space: nowrap;">
                         <thead>
                             <tr>
-                                <th>Record ID</th>
-                                <th>MSISDN A</th>
-                                <th>MSISDN B</th>
-                                <th>Call Type</th>
-                                <th>Call Date</th>
-                                <th>Call Start Time</th>
-                                <th>Duration (sec)</th>
-                                <th>IMEI</th>
-                                <th>Cell ID</th>
-                                <th>Operator</th>
-                                <th>Circle</th>
+                                <th style="min-width: 120px;">Record ID</th>
+                                <th style="min-width: 120px;">MSISDN A</th>
+                                <th style="min-width: 120px;">MSISDN B</th>
+                                <th style="min-width: 100px;">Call Type</th>
+                                <th style="min-width: 120px;">Call Date</th>
+                                <th style="min-width: 150px;">Call Start Time</th>
+                                <th style="min-width: 100px;">Duration (sec)</th>
+                                <th style="min-width: 150px;">IMEI</th>
+                                <th style="min-width: 100px;">Cell ID</th>
+                                <th style="min-width: 100px;">Operator</th>
+                                <th style="min-width: 100px;">Circle</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${records.slice(0, 100).map(record => `
                                 <tr>
-                                    <td><code>${record.record_id || ''}</code></td>
-                                    <td><code>${record.msisdn_a || ''}</code></td>
-                                    <td><code>${record.msisdn_b || ''}</code></td>
-                                    <td>${record.call_type || ''}</td>
-                                    <td>${record.call_date || ''}</td>
-                                    <td>${record.call_start_time || ''}</td>
-                                    <td>${record.call_duration_sec || 0}</td>
-                                    <td><code>${record.imei || ''}</code></td>
-                                    <td>${record.cell_id || ''}</td>
-                                    <td>${record.operator || ''}</td>
-                                    <td>${record.circle || ''}</td>
+                                    <td style="white-space: nowrap;"><code>${record.record_id || ''}</code></td>
+                                    <td style="white-space: nowrap;"><code>${record.msisdn_a || ''}</code></td>
+                                    <td style="white-space: nowrap;"><code>${record.msisdn_b || ''}</code></td>
+                                    <td style="white-space: nowrap;">${record.call_type || ''}</td>
+                                    <td style="white-space: nowrap;">${record.call_date || ''}</td>
+                                    <td style="white-space: nowrap;">${record.call_start_time || ''}</td>
+                                    <td style="white-space: nowrap;">${record.call_duration_sec || 0}</td>
+                                    <td style="white-space: nowrap;"><code>${record.imei || ''}</code></td>
+                                    <td style="white-space: nowrap;">${record.cell_id || ''}</td>
+                                    <td style="white-space: nowrap;">${record.operator || ''}</td>
+                                    <td style="white-space: nowrap;">${record.circle || ''}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -511,28 +532,30 @@ async function loadDailyFirstLast(sessionId) {
             }
 
             content.innerHTML = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>First Call Time</th>
-                            <th>First Call B-Number</th>
-                            <th>Last Call Time</th>
-                            <th>Last Call B-Number</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${dailyData.map(item => `
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%;">
+                    <table class="data-table" style="min-width: 100%;">
+                        <thead>
                             <tr>
-                                <td>${item.date || ''}</td>
-                                <td>${item.first_call_time || ''}</td>
-                                <td><code>${item.first_call_b_number || ''}</code></td>
-                                <td>${item.last_call_time || ''}</td>
-                                <td><code>${item.last_call_b_number || ''}</code></td>
+                                <th>Date</th>
+                                <th>First Call Time</th>
+                                <th>First Call B-Number</th>
+                                <th>Last Call Time</th>
+                                <th>Last Call B-Number</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            ${dailyData.map(item => `
+                                <tr>
+                                    <td>${item.date || ''}</td>
+                                    <td>${item.first_call_time || ''}</td>
+                                    <td><code>${item.first_call_b_number || ''}</code></td>
+                                    <td>${item.last_call_time || ''}</td>
+                                    <td><code>${item.last_call_b_number || ''}</code></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
             `;
         }
     } catch (error) {
@@ -645,26 +668,28 @@ async function loadDailyIMEITracking(sessionId) {
             }
 
             content.innerHTML = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>IMEI</th>
-                            <th>Call Count</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${dailyData.flatMap(item =>
-                            (item.imeis || []).map(imeiData => `
-                                <tr>
-                                    <td>${item.date || ''}</td>
-                                    <td><code>${imeiData.imei || ''}</code></td>
-                                    <td>${imeiData.call_count || 0}</td>
-                                </tr>
-                            `)
-                        ).join('')}
-                    </tbody>
-                </table>
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%;">
+                    <table class="data-table" style="min-width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>IMEI</th>
+                                <th>Call Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dailyData.flatMap(item =>
+                                (item.imeis || []).map(imeiData => `
+                                    <tr>
+                                        <td>${item.date || ''}</td>
+                                        <td><code>${imeiData.imei || ''}</code></td>
+                                        <td>${imeiData.call_count || 0}</td>
+                                    </tr>
+                                `)
+                            ).join('')}
+                        </tbody>
+                    </table>
+                </div>
             `;
         }
     } catch (error) {
@@ -722,28 +747,30 @@ async function loadDailyFirstLastLocation(sessionId) {
             }
 
             content.innerHTML = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>First Location Cell ID</th>
-                            <th>First Location Time</th>
-                            <th>Last Location Cell ID</th>
-                            <th>Last Location Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${dailyData.map(item => `
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%;">
+                    <table class="data-table" style="min-width: 100%;">
+                        <thead>
                             <tr>
-                                <td>${item.date || ''}</td>
-                                <td>${item.first_location?.cell_id || ''}</td>
-                                <td>${item.first_location?.time || ''}</td>
-                                <td>${item.last_location?.cell_id || ''}</td>
-                                <td>${item.last_location?.time || ''}</td>
+                                <th>Date</th>
+                                <th>First Location Cell ID</th>
+                                <th>First Location Time</th>
+                                <th>Last Location Cell ID</th>
+                                <th>Last Location Time</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            ${dailyData.map(item => `
+                                <tr>
+                                    <td>${item.date || ''}</td>
+                                    <td>${item.first_location?.cell_id || ''}</td>
+                                    <td>${item.first_location?.time || ''}</td>
+                                    <td>${item.last_location?.cell_id || ''}</td>
+                                    <td>${item.last_location?.time || ''}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
             `;
         }
     } catch (error) {
@@ -1510,6 +1537,36 @@ async function exportCurrentSession(sessionId, format = 'excel') {
     }
 }
 
+async function exportCurrentSessionPDF(sessionId) {
+    if (!sessionId) {
+        sessionId = window.currentSessionId;
+    }
+
+    if (!sessionId) {
+        alert('No session data available. Please upload a file first.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/export-pdf-session?session_id=${encodeURIComponent(sessionId)}`);
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to generate PDF');
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cdr_analysis_${sessionId}_report.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        alert(`Error generating PDF: ${error.message}`);
+    }
+}
+
 async function exportPDF() {
     const suspect = document.getElementById('exportSuspectSelect').value;
 
@@ -1640,4 +1697,574 @@ function setupWebSocket() {
         `;
         alertsDiv.appendChild(alertEl);
     };
+}
+
+// Advanced Intelligence Dashboard Functions
+function showAdvancedDashboard() {
+    const standardView = document.getElementById('singleAnalysisView');
+    const advancedView = document.getElementById('advancedDashboardView');
+
+    if (standardView && advancedView) {
+        standardView.style.display = 'none';
+        advancedView.style.display = 'block';
+
+        // Load advanced analytics if session exists
+        if (window.currentSessionId) {
+            loadAdvancedAnalytics(window.currentSessionId);
+        }
+    }
+}
+
+function hideAdvancedDashboard() {
+    const standardView = document.getElementById('singleAnalysisView');
+    const advancedView = document.getElementById('advancedDashboardView');
+
+    if (standardView && advancedView) {
+        advancedView.style.display = 'none';
+        standardView.style.display = 'block';
+    }
+}
+
+function switchAdvancedSection(section) {
+    // No longer needed - all sections are visible in grid
+    // Keep for backward compatibility if needed
+}
+
+async function loadAdvancedAnalytics(sessionId) {
+    if (!sessionId) {
+        sessionId = window.currentSessionId;
+    }
+
+    if (!sessionId) {
+        console.error('No session ID available');
+        return;
+    }
+
+    // Load all sections in parallel for grid view
+    await Promise.all([
+        loadAdvancedOverview(sessionId),
+        loadAdvancedNetwork(sessionId),
+        loadAdvancedTimeline(sessionId),
+        loadAdvancedIMEI(sessionId),
+        loadAdvancedLocation(sessionId),
+        loadAdvancedColocation(sessionId),
+        loadAdvancedAnomalies(sessionId),
+        loadAdvancedAudit(sessionId)
+    ]);
+}
+
+async function loadAdvancedSectionData(section, sessionId) {
+    switch(section) {
+        case 'overview':
+            await loadAdvancedOverview(sessionId);
+            break;
+        case 'network':
+            await loadAdvancedNetwork(sessionId);
+            break;
+        case 'timeline':
+            await loadAdvancedTimeline(sessionId);
+            break;
+        case 'imei':
+            await loadAdvancedIMEI(sessionId);
+            break;
+        case 'location':
+            await loadAdvancedLocation(sessionId);
+            break;
+        case 'colocation':
+            await loadAdvancedColocation(sessionId);
+            break;
+        case 'anomalies':
+            await loadAdvancedAnomalies(sessionId);
+            break;
+        case 'tables':
+            await loadAdvancedTables(sessionId);
+            break;
+        case 'audit':
+            await loadAdvancedAudit(sessionId);
+            break;
+    }
+}
+
+async function loadAdvancedOverview(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/overview?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const overview = data.data;
+
+            // Update case header
+            const caseId = document.getElementById('caseId');
+            const targetMsisdn = document.getElementById('targetMsisdn');
+            if (caseId) caseId.textContent = overview.case_id || `CDR_INV_${new Date().getFullYear()}_${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+            if (targetMsisdn) targetMsisdn.textContent = overview.target_msisdn || '--';
+
+            // Update KPIs
+            const kpiContainer = document.getElementById('overviewKpis');
+            if (kpiContainer) {
+                kpiContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${overview.total_calls || 0}</div>
+                        <div class="stat-label">Total Calls</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${overview.unique_contacts || 0}</div>
+                        <div class="stat-label">Unique Contacts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${overview.unique_imeis || 0}</div>
+                        <div class="stat-label">IMEIs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${overview.unique_locations || 0}</div>
+                        <div class="stat-label">Locations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value"><span class="risk-flag ${(overview.risk_level || 'low').toLowerCase()}">${(overview.risk_level || 'LOW').toUpperCase()}</span></div>
+                        <div class="stat-label">Risk Flag</div>
+                    </div>
+                `;
+            }
+
+            // Update intelligence story
+            const storyContainer = document.getElementById('intelligenceStory');
+            if (storyContainer) {
+                storyContainer.innerHTML = `<p style="line-height: 1.8; color: var(--text-secondary);">${overview.intelligence_story || 'No intelligence story available.'}</p>`;
+            }
+
+            // Update alerts
+            const alertsContainer = document.getElementById('activeAlerts');
+            if (alertsContainer && overview.alerts) {
+                alertsContainer.innerHTML = overview.alerts.map(alert => `
+                    <div class="alert-item ${alert.severity || 'info'}">
+                        <h5>${alert.title || 'Alert'}</h5>
+                        <p>${alert.description || ''}</p>
+                        ${alert.evidence ? `<div class="evidence">Evidence: ${alert.evidence}</div>` : ''}
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading advanced overview:', error);
+    }
+}
+
+async function loadAdvancedNetwork(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/network?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const network = data.data;
+            const container = document.getElementById('networkGraphContainer');
+
+            if (container && network.nodes && network.edges) {
+                container.innerHTML = '';
+
+                const nodes = new vis.DataSet(network.nodes);
+                const edges = new vis.DataSet(network.edges);
+
+                const networkData = { nodes, edges };
+                const options = {
+                    nodes: {
+                        shape: 'dot',
+                        size: (node) => Math.max(10, Math.min(30, node.value || 20)),
+                        font: { color: '#ffffff', size: 12 },
+                        borderWidth: 2,
+                        color: {
+                            border: '#ffffff',
+                            background: (node) => node.color || '#6366f1'
+                        }
+                    },
+                    edges: {
+                        width: (edge) => Math.max(1, Math.min(5, (edge.value || 1) / 10)),
+                        color: { color: '#6366f1', highlight: '#ec4899' },
+                        arrows: { to: { enabled: true } },
+                        smooth: { type: 'continuous' }
+                    },
+                    physics: {
+                        enabled: true,
+                        stabilization: { iterations: 200 }
+                    },
+                    interaction: {
+                        tooltipDelay: 200,
+                        hover: true
+                    }
+                };
+
+                new vis.Network(container, networkData, options);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading network graph:', error);
+    }
+}
+
+async function loadAdvancedTimeline(sessionId, callType = 'all') {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/timeline?session_id=${encodeURIComponent(sessionId)}&call_type=${callType}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const heatmapData = data.data;
+            const container = document.getElementById('heatmapContainer');
+
+            if (container && heatmapData.z && heatmapData.x && heatmapData.y) {
+                const trace = {
+                    x: heatmapData.x,
+                    y: heatmapData.y,
+                    z: heatmapData.z,
+                    type: 'heatmap',
+                    colorscale: 'Viridis',
+                    showscale: true
+                };
+
+                const layout = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#ffffff' },
+                    xaxis: { title: 'Hour of Day' },
+                    yaxis: { title: 'Date' }
+                };
+
+                Plotly.newPlot(container, [trace], layout, {responsive: true});
+            }
+        }
+    } catch (error) {
+        console.error('Error loading timeline heatmap:', error);
+    }
+}
+
+function toggleHeatmapType(type) {
+    // Update active button
+    document.querySelectorAll('#timelineSection .tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Reload with filter
+    if (window.currentSessionId) {
+        loadAdvancedTimeline(window.currentSessionId, type);
+    }
+}
+
+async function loadAdvancedIMEI(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/imei?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const imeiData = data.data;
+            const container = document.getElementById('imeiTimelineContainer');
+            const detailsContainer = document.getElementById('imeiDetails');
+
+            if (container && imeiData.timeline && imeiData.timeline.length > 0) {
+                // Create timeline chart - use bar chart to show usage over time
+                const traces = imeiData.timeline.map((item, idx) => {
+                    const colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
+                    return {
+                        x: item.dates,
+                        y: item.call_counts || new Array(item.dates.length).fill(1),
+                        type: 'bar',
+                        name: item.imei.substring(0, 12) + '...',
+                        marker: { color: colors[idx % colors.length] }
+                    };
+                });
+
+                const layout = {
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#ffffff' },
+                    xaxis: { title: 'Date' },
+                    yaxis: { title: 'Call Count' },
+                    barmode: 'stack',
+                    showlegend: true
+                };
+
+                Plotly.newPlot(container, traces, layout, {responsive: true});
+            } else if (container) {
+                container.innerHTML = '<div style="padding: 2rem; color: #888;">No IMEI timeline data available</div>';
+            }
+
+            if (detailsContainer) {
+                if (imeiData.switches && imeiData.switches.length > 0) {
+                    detailsContainer.innerHTML = `
+                        <h4 style="margin-top: 2rem; margin-bottom: 1rem;">IMEI Switches Detected</h4>
+                        ${imeiData.switches.map(switchItem => `
+                            <div class="alert-item warning">
+                                <h5>Device Change on ${new Date(switchItem.timestamp).toLocaleString()}</h5>
+                                <p>From: <code>${switchItem.from_imei || 'Unknown'}</code> → To: <code>${switchItem.to_imei || 'Unknown'}</code></p>
+                                <div class="evidence">Location: ${switchItem.location || 'N/A'}</div>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    detailsContainer.innerHTML = '<p>No IMEI switches detected.</p>';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading IMEI analysis:', error);
+        const container = document.getElementById('imeiTimelineContainer');
+        if (container) {
+            container.innerHTML = `<div style="padding: 2rem; color: #ef4444;">Error loading IMEI analysis: ${error.message}</div>`;
+        }
+    }
+}
+
+async function loadAdvancedLocation(sessionId, layer = 'day') {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/location?session_id=${encodeURIComponent(sessionId)}&layer=${layer}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const locationData = data.data;
+            const mapContainer = document.getElementById('movementMap');
+
+            if (mapContainer && locationData.paths) {
+                mapContainer.innerHTML = '';
+
+                // Calculate center
+                const allCoords = locationData.paths.flatMap(p => p.coordinates || []);
+                if (allCoords.length > 0) {
+                    const avgLat = allCoords.reduce((sum, c) => sum + c[1], 0) / allCoords.length;
+                    const avgLon = allCoords.reduce((sum, c) => sum + c[0], 0) / allCoords.length;
+
+                    const map = new maplibregl.Map({
+                        container: 'movementMap',
+                        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+                        center: [avgLon, avgLat],
+                        zoom: 12
+                    });
+
+                    map.on('load', () => {
+                        // Add paths
+                        locationData.paths.forEach((path, idx) => {
+                            if (path.coordinates && path.coordinates.length > 0) {
+                                map.addSource(`path-${idx}`, {
+                                    type: 'geojson',
+                                    data: {
+                                        type: 'Feature',
+                                        geometry: {
+                                            type: 'LineString',
+                                            coordinates: path.coordinates
+                                        }
+                                    }
+                                });
+
+                                map.addLayer({
+                                    id: `path-layer-${idx}`,
+                                    type: 'line',
+                                    source: `path-${idx}`,
+                                    paint: {
+                                        'line-color': path.color || '#6366f1',
+                                        'line-width': 3
+                                    }
+                                });
+                            }
+                        });
+
+                        // Add markers
+                        if (locationData.markers) {
+                            locationData.markers.forEach((marker, idx) => {
+                                if (marker.coordinates) {
+                                    const el = document.createElement('div');
+                                    el.className = 'marker';
+                                    el.style.width = '20px';
+                                    el.style.height = '20px';
+                                    el.style.borderRadius = '50%';
+                                    el.style.background = marker.color || '#6366f1';
+                                    el.style.border = '2px solid white';
+
+                                    new maplibregl.Marker(el)
+                                        .setLngLat(marker.coordinates)
+                                        .setPopup(new maplibregl.Popup().setHTML(`
+                                            <strong>${marker.title || 'Location'}</strong><br>
+                                            ${marker.description || ''}
+                                        `))
+                                        .addTo(map);
+                                }
+                            });
+                        }
+                    });
+                } else {
+                    mapContainer.innerHTML = '<div style="padding: 2rem; color: #ef4444;">No location data available</div>';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading location map:', error);
+        const mapContainer = document.getElementById('movementMap');
+        if (mapContainer) {
+            mapContainer.innerHTML = `<div style="padding: 2rem; color: #ef4444;">Error loading location map: ${error.message}</div>`;
+        }
+    }
+}
+
+function toggleLocationLayer(layer) {
+    // Update active button
+    document.querySelectorAll('#locationSection .tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Reload with layer filter
+    if (window.currentSessionId) {
+        loadAdvancedLocation(window.currentSessionId, layer);
+    }
+}
+
+async function loadAdvancedColocation(sessionId) {
+    try {
+        const windowMinutes = document.getElementById('colocationWindow')?.value || 15;
+        const response = await fetch(`${API_BASE}/analytics/intelligence/colocation?session_id=${encodeURIComponent(sessionId)}&window_minutes=${windowMinutes}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const colocations = data.data;
+            const container = document.getElementById('colocationResults');
+
+            if (container) {
+                if (colocations.length === 0) {
+                    container.innerHTML = '<p>No co-locations detected.</p>';
+                } else {
+                    container.innerHTML = colocations.map(coloc => `
+                        <div class="colocation-item ${coloc.repeated ? 'high-risk' : ''}">
+                            <h4>${coloc.date || 'Unknown Date'} | ${coloc.time_window || 'Unknown Time'}</h4>
+                            <p><strong>Location:</strong> ${coloc.location || 'Unknown'}</p>
+                            <ul>
+                                ${coloc.msisdns.map(msisdn => `<li>${msisdn}</li>`).join('')}
+                            </ul>
+                            ${coloc.repeated ? '<p style="color: #ef4444; margin-top: 0.5rem;"><strong>⚠ Repeated co-location detected</strong></p>' : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading co-location analysis:', error);
+    }
+}
+
+function analyzeColocation() {
+    if (window.currentSessionId) {
+        loadAdvancedColocation(window.currentSessionId);
+    }
+}
+
+async function loadAdvancedAnomalies(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/anomalies?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const anomalies = data.data;
+            const container = document.getElementById('anomaliesList');
+
+            if (container) {
+                if (anomalies.length === 0) {
+                    container.innerHTML = '<p>No anomalies detected.</p>';
+                } else {
+                    container.innerHTML = anomalies.map(anomaly => `
+                        <div class="alert-item ${anomaly.severity || 'warning'}">
+                            <h5>${anomaly.title || 'Anomaly'}</h5>
+                            <p>${anomaly.description || ''}</p>
+                            <div class="evidence">
+                                <strong>Reason:</strong> ${anomaly.reason || 'N/A'}<br>
+                                <strong>Evidence:</strong> ${anomaly.evidence || 'N/A'}<br>
+                                ${anomaly.supporting_data ? `<strong>Supporting Data:</strong> ${JSON.stringify(anomaly.supporting_data)}` : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading anomalies:', error);
+    }
+}
+
+async function loadAdvancedTables(sessionId) {
+    const container = document.getElementById('tablesContent');
+    if (!container) return;
+
+    // Get active tab
+    const activeTab = container.querySelector('.tab-content.active')?.id || 'corrected-advanced';
+
+    // Load data based on active tab
+    switch(activeTab) {
+        case 'corrected-advanced':
+            await loadCorrected(sessionId);
+            if (container) {
+                const correctedDiv = document.createElement('div');
+                correctedDiv.id = 'correctedContentAdvanced';
+                container.appendChild(correctedDiv);
+                // Copy content from standard view
+                const standardContent = document.getElementById('correctedContent');
+                if (standardContent) {
+                    correctedDiv.innerHTML = standardContent.innerHTML;
+                }
+            }
+            break;
+        case 'daily-first-last-advanced':
+            await loadDailyFirstLast(sessionId);
+            break;
+        case 'imei-advanced':
+            await loadMaxIMEI(sessionId);
+            break;
+        case 'location-advanced':
+            await loadMaxLocation(sessionId);
+            break;
+    }
+}
+
+async function loadAdvancedAudit(sessionId) {
+    try {
+        const response = await fetch(`${API_BASE}/analytics/intelligence/audit?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const audit = data.data;
+            const container = document.getElementById('auditTrail');
+
+            if (container) {
+                container.innerHTML = `
+                    <div style="margin-bottom: 2rem;">
+                        <h4>Data Flow</h4>
+                        <div style="padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; margin-top: 1rem;">
+                            <p>RAW CDR ROW → NORMALIZED RECORD → ANALYTICS</p>
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Audit Trail</h4>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Action</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${audit.trail.map(item => `
+                                    <tr>
+                                        <td>${new Date(item.timestamp).toLocaleString()}</td>
+                                        <td>${item.action}</td>
+                                        <td>${item.details || ''}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading audit trail:', error);
+    }
+}
+
+function applyAdvancedFilters() {
+    // Reload current section with filters
+    const activeSection = document.querySelector('.advanced-section.active');
+    if (activeSection && window.currentSessionId) {
+        const sectionId = activeSection.id.replace('Section', '');
+        loadAdvancedSectionData(sectionId, window.currentSessionId);
+    }
 }
